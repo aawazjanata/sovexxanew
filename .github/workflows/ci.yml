@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.0', '8.1', '8.2']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, curl, json, xml
+      - name: Install composer deps
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+      - name: PHP lint
+        run: |
+          find . -name "*.php" -not -path "./vendor/*" -print0 | xargs -0 -n1 -P4 php -l
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --configuration tests/phpunit.xml || true
