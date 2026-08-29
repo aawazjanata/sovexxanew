@@ -1,10 +1,10 @@
 {
   "name": "sovexxa/sovexxa-society-management",
-  "description": "Sovexxa Society Management WordPress plugin - optional dev dependencies (dompdf, phpunit)",
-  "type": "library",
+  "description": "Sovexxa Society Management WordPress plugin",
+  "type": "wordpress-plugin",
   "require": {
     "php": ">=7.4",
-    "dompdf/dompdf": "^2.0"
+    "dompdf/dompdf": "^3.1"
   },
   "require-dev": {
     "phpunit/phpunit": "^9.5",
@@ -16,6 +16,7 @@
     }
   },
   "config": {
-    "optimize-autoloader": true
+    "optimize-autoloader": true,
+    "sort-packages": true
   }
 }
