@@ -1,29 +1,69 @@
-name: CI
+name: Sovexxa CI
 
 on:
   push:
-    branches: [ main, feature/* ]
+    branches:
+      - main
+      - "feature/**"
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   php:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        php: ['8.0', '8.1', '8.2']
+        php: ["8.0", "8.1", "8.2"]
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, curl, json, xml
-      - name: Install composer deps
-        run: |
-          composer install --prefer-dist --no-interaction --no-progress
+          extensions: mbstring, curl, json, xml, mysqli
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --no-check-publish
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
       - name: PHP lint
+        shell: bash
         run: |
-          find . -name "*.php" -not -path "./vendor/*" -print0 | xargs -0 -n1 -P4 php -l
+          set -e
+          find . \
+            -type f \
+            -name "*.php" \
+            -not -path "./vendor/*" \
+            -print0 |
+          xargs -0 -n1 -P4 php -l
+
       - name: Run PHPUnit
-        run: vendor/bin/phpunit --configuration tests/phpunit.xml || true
+        run: vendor/bin/phpunit --configuration tests/phpunit.xml
+
+  javascript:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check ESLint configuration
+        run: |
+          if [ -f ".eslintrc.json" ]; then
+            echo "ESLint configuration found."
+          else
+            echo "No ESLint configuration found."
+          fi
