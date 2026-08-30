@@ -2,19 +2,33 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature/* ]
+    branches:
+      - main
+      - 'feature/*'
+
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
+
+  # --------------------------------
+  # PHP TESTS
+  # --------------------------------
   php:
+    name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        php: ['8.0', '8.1', '8.2']
+        php:
+          - '8.0'
+          - '8.1'
+          - '8.2'
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -25,34 +39,56 @@ jobs:
           extensions: mbstring, curl, json, xml
           coverage: none
 
+      - name: Check PHP version
+        run: php -v
+
       - name: Install Composer dependencies
         run: |
-          composer install --prefer-dist --no-interaction --no-progress
+          composer install \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress
 
       - name: PHP syntax check
         shell: bash
         run: |
           set -e
+
           echo "Checking PHP syntax..."
-          find . -name "*.php" -not -path "./vendor/*" -print0 |
-            while IFS= read -r -d '' file; do
-              echo "Linting: $file"
-              php -l "$file"
-            done
+
+          find . \
+            -type f \
+            -name "*.php" \
+            -not -path "./vendor/*" \
+            -print0 |
+          while IFS= read -r -d '' file
+          do
+            echo "Linting: $file"
+            php -l "$file"
+          done
 
       - name: Run PHPUnit
+        shell: bash
         run: |
           if [ -x "vendor/bin/phpunit" ]; then
-            vendor/bin/phpunit --configuration tests/phpunit.xml
+            vendor/bin/phpunit \
+              --configuration tests/phpunit.xml
           else
-            echo "PHPUnit not installed; skipping."
+            echo "PHPUnit not found. Skipping PHPUnit."
           fi
 
+
+  # --------------------------------
+  # BUILD WORDPRESS PLUGIN ZIP
+  # --------------------------------
   build:
+    name: Build Plugin ZIP
     runs-on: ubuntu-latest
+
     needs: php
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -63,21 +99,65 @@ jobs:
           extensions: mbstring, curl, json, xml
           coverage: none
 
+      - name: Check PHP version
+        run: php -v
+
       - name: Install Composer dependencies
         run: |
-          composer install --prefer-dist --no-interaction --no-progress
+          composer install \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress
 
+      # --------------------------------
+      # Build ZIP
+      # --------------------------------
       - name: Build plugin ZIP
+        shell: bash
         run: |
+          set -e
+
+          echo "Running ZIP builder..."
+
           php tools/build-zip.php
 
-      - name: Find generated ZIP
-        run: |
-          find . -maxdepth 3 -type f -name "*.zip" -print
+          echo ""
+          echo "ZIP files after build:"
+          find . -type f -name "*.zip" -print
 
+      # --------------------------------
+      # Verify ZIP exists
+      # --------------------------------
+      - name: Verify plugin ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_COUNT=$(find . -type f -name "*.zip" | wc -l)
+
+          echo "ZIP count: $ZIP_COUNT"
+
+          if [ "$ZIP_COUNT" -eq 0 ]; then
+            echo "ERROR: No ZIP file was created."
+            echo "Current directory:"
+            pwd
+            echo ""
+            echo "Directory contents:"
+            find . -maxdepth 3 -type f | sort
+            exit 1
+          fi
+
+          echo "ZIP file(s) found:"
+          find . -type f -name "*.zip" -print
+
+      # --------------------------------
+      # Upload ZIP as GitHub Artifact
+      # --------------------------------
       - name: Upload plugin ZIP
         uses: actions/upload-artifact@v4
         with:
           name: sovexxa-society-management-plugin
-          path: "*.zip"
+          path: |
+            **/*.zip
           if-no-files-found: error
+          retention-days: 7
