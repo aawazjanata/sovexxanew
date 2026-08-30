@@ -4,17 +4,12 @@ on:
   push:
     branches:
       - main
-      - 'feature/*'
-
+      - 'feature/**'
   pull_request:
     branches:
       - main
 
 jobs:
-
-  # --------------------------------
-  # PHP TESTS
-  # --------------------------------
   php:
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
@@ -28,7 +23,6 @@ jobs:
           - '8.2'
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -39,15 +33,9 @@ jobs:
           extensions: mbstring, curl, json, xml
           coverage: none
 
-      - name: Check PHP version
-        run: php -v
-
       - name: Install Composer dependencies
         run: |
-          composer install \
-            --prefer-dist \
-            --no-interaction \
-            --no-progress
+          composer install --prefer-dist --no-interaction --no-progress
 
       - name: PHP syntax check
         shell: bash
@@ -61,34 +49,33 @@ jobs:
             -name "*.php" \
             -not -path "./vendor/*" \
             -print0 |
-          while IFS= read -r -d '' file
-          do
+          while IFS= read -r -d '' file; do
             echo "Linting: $file"
             php -l "$file"
           done
 
       - name: Run PHPUnit
-        shell: bash
         run: |
-          if [ -x "vendor/bin/phpunit" ]; then
-            vendor/bin/phpunit \
-              --configuration tests/phpunit.xml
+          if [ -f tests/phpunit.xml ]; then
+            vendor/bin/phpunit --configuration tests/phpunit.xml
           else
-            echo "PHPUnit not found. Skipping PHPUnit."
+            echo "tests/phpunit.xml not found. Skipping PHPUnit."
           fi
 
+      - name: Run PHPCS
+        run: |
+          if [ -x vendor/bin/phpcs ]; then
+            vendor/bin/phpcs --standard=phpcs.xml || true
+          else
+            echo "PHPCS not found. Skipping."
+          fi
 
-  # --------------------------------
-  # BUILD WORDPRESS PLUGIN ZIP
-  # --------------------------------
   build:
-    name: Build Plugin ZIP
+    name: Build WordPress Plugin ZIP
     runs-on: ubuntu-latest
-
     needs: php
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -99,65 +86,50 @@ jobs:
           extensions: mbstring, curl, json, xml
           coverage: none
 
-      - name: Check PHP version
-        run: php -v
-
       - name: Install Composer dependencies
         run: |
-          composer install \
-            --prefer-dist \
-            --no-interaction \
-            --no-progress
+          composer install --prefer-dist --no-interaction --no-progress
 
-      # --------------------------------
-      # Build ZIP
-      # --------------------------------
-      - name: Build plugin ZIP
-        shell: bash
+      - name: Check build script
+        run: |
+          test -f tools/build-zip.php
+          echo "Build script found:"
+          ls -la tools/build-zip.php
+
+      - name: Build ZIP
         run: |
           set -e
+
+          echo "Current directory:"
+          pwd
 
           echo "Running ZIP builder..."
 
           php tools/build-zip.php
 
           echo ""
-          echo "ZIP files after build:"
-          find . -type f -name "*.zip" -print
+          echo "Searching for ZIP files..."
 
-      # --------------------------------
-      # Verify ZIP exists
-      # --------------------------------
-      - name: Verify plugin ZIP
-        shell: bash
-        run: |
-          set -e
+          find . -maxdepth 3 -type f -name "*.zip" -print
 
-          ZIP_COUNT=$(find . -type f -name "*.zip" | wc -l)
+          ZIP_COUNT=$(find . -maxdepth 3 -type f -name "*.zip" | wc -l)
 
           echo "ZIP count: $ZIP_COUNT"
 
           if [ "$ZIP_COUNT" -eq 0 ]; then
             echo "ERROR: No ZIP file was created."
-            echo "Current directory:"
-            pwd
             echo ""
             echo "Directory contents:"
             find . -maxdepth 3 -type f | sort
             exit 1
           fi
 
-          echo "ZIP file(s) found:"
-          find . -type f -name "*.zip" -print
-
-      # --------------------------------
-      # Upload ZIP as GitHub Artifact
-      # --------------------------------
       - name: Upload plugin ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: sovexxa-society-management-plugin
+          name: sovexxa-plugin
           path: |
-            **/*.zip
+            *.zip
+            build/*.zip
+            dist/*.zip
           if-no-files-found: error
-          retention-days: 7
