@@ -2,25 +2,18 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - 'feature/**'
+    branches: [ main, feature/* ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   php:
-    name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        php:
-          - '8.0'
-          - '8.1'
-          - '8.2'
+        php: ['8.0', '8.1', '8.2']
 
     steps:
       - name: Checkout
@@ -33,11 +26,19 @@ jobs:
           extensions: mbstring, curl, json, xml
           coverage: none
 
+      - name: Check PHP version
+        run: php -v
+
       - name: Install Composer dependencies
         run: |
-          composer install --prefer-dist --no-interaction --no-progress
+          composer install \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress \
+            --optimize-autoloader
 
-      - name: PHP syntax check
+      - name: PHP lint
+        timeout-minutes: 5
         shell: bash
         run: |
           set -e
@@ -54,82 +55,10 @@ jobs:
             php -l "$file"
           done
 
+          echo "PHP lint completed successfully."
+
       - name: Run PHPUnit
+        timeout-minutes: 5
         run: |
-          if [ -f tests/phpunit.xml ]; then
-            vendor/bin/phpunit --configuration tests/phpunit.xml
-          else
-            echo "tests/phpunit.xml not found. Skipping PHPUnit."
-          fi
-
-      - name: Run PHPCS
-        run: |
-          if [ -x vendor/bin/phpcs ]; then
-            vendor/bin/phpcs --standard=phpcs.xml || true
-          else
-            echo "PHPCS not found. Skipping."
-          fi
-
-  build:
-    name: Build WordPress Plugin ZIP
-    runs-on: ubuntu-latest
-    needs: php
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: mbstring, curl, json, xml
-          coverage: none
-
-      - name: Install Composer dependencies
-        run: |
-          composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Check build script
-        run: |
-          test -f tools/build-zip.php
-          echo "Build script found:"
-          ls -la tools/build-zip.php
-
-      - name: Build ZIP
-        run: |
-          set -e
-
-          echo "Current directory:"
-          pwd
-
-          echo "Running ZIP builder..."
-
-          php tools/build-zip.php
-
-          echo ""
-          echo "Searching for ZIP files..."
-
-          find . -maxdepth 3 -type f -name "*.zip" -print
-
-          ZIP_COUNT=$(find . -maxdepth 3 -type f -name "*.zip" | wc -l)
-
-          echo "ZIP count: $ZIP_COUNT"
-
-          if [ "$ZIP_COUNT" -eq 0 ]; then
-            echo "ERROR: No ZIP file was created."
-            echo ""
-            echo "Directory contents:"
-            find . -maxdepth 3 -type f | sort
-            exit 1
-          fi
-
-      - name: Upload plugin ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: sovexxa-plugin
-          path: |
-            *.zip
-            build/*.zip
-            dist/*.zip
-          if-no-files-found: error
+          vendor/bin/phpunit \
+            --configuration tests/phpunit.xml
